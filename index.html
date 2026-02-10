@@ -1,0 +1,526 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blox Dash - Premium Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;700;900&display=swap');
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #020617;
+            font-family: 'Outfit', sans-serif;
+            user-select: none;
+            touch-action: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        canvas {
+            display: block;
+            background: radial-gradient(circle at center, #1e293b, #020617);
+        }
+
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+            background: rgba(2, 6, 23, 0.85);
+            backdrop-filter: blur(8px);
+            padding: 20px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            border: none;
+            padding: 14px 32px;
+            font-size: 1.2rem;
+            font-weight: 900;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            text-transform: uppercase;
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.4);
+            min-width: 220px;
+            text-align: center;
+        }
+
+        .btn:hover {
+            transform: translateY(-3px) scale(1.05);
+            filter: brightness(1.1);
+        }
+
+        .btn-gold {
+            background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+            box-shadow: 0 10px 15px -3px rgba(245, 158, 11, 0.4);
+        }
+
+        .btn-red {
+            background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%);
+            box-shadow: 0 10px 15px -3px rgba(239, 68, 68, 0.4);
+        }
+
+        .title {
+            font-size: clamp(3rem, 10vw, 5rem);
+            font-weight: 900;
+            text-align: center;
+            background: linear-gradient(to bottom, #fff, #6366f1);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 2rem;
+            letter-spacing: -2px;
+        }
+
+        .gem-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(15, 23, 42, 0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 2px solid #fbbf24;
+            color: #fbbf24;
+            font-weight: 900;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .shop-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
+            width: 100%;
+            max-width: 800px;
+            max-height: 60vh;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        .skin-card {
+            background: rgba(30, 41, 59, 0.5);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 20px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            transition: 0.3s;
+        }
+
+        .skin-card.active {
+            border-color: #6366f1;
+            background: rgba(99, 102, 241, 0.1);
+        }
+
+        .skin-preview {
+            width: 50px;
+            height: 50px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 900;
+            color: white;
+            border: 2px solid rgba(255,255,255,0.2);
+        }
+
+        .leaderboard-list {
+            width: 100%;
+            max-width: 500px;
+            background: rgba(15, 23, 42, 0.5);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+
+        .leaderboard-item:last-child { border: none; }
+        
+        .rank-1 { color: #fbbf24; background: rgba(251, 191, 36, 0.1); }
+
+        .hidden { display: none !important; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <canvas id="gameCanvas"></canvas>
+
+    <div class="gem-display">
+        <span>💎</span> <span id="gem-count">0</span>
+    </div>
+
+    <!-- Main Menu -->
+    <div id="main-menu" class="ui-overlay">
+        <h1 class="title">BLOX DASH</h1>
+        <div class="flex flex-col gap-4">
+            <button class="btn" onclick="showLevelSelect()">SPEEL NU</button>
+            <button class="btn btn-gold" onclick="showShop()">SKIN SHOP</button>
+            <button class="btn" onclick="showLeaderboard()">LEADERBOARD</button>
+        </div>
+    </div>
+
+    <!-- Level Select -->
+    <div id="level-select" class="ui-overlay hidden">
+        <h2 class="text-3xl font-black mb-8">KIES NIVEAU</h2>
+        <div class="flex flex-col gap-3 w-full max-w-xs">
+            <button class="btn !bg-emerald-500" onclick="startGame('easy')">EASY</button>
+            <button class="btn !bg-sky-500" onclick="startGame('medium')">MEDIUM</button>
+            <button class="btn !bg-orange-500" onclick="startGame('hard')">HARD</button>
+            <button class="btn !bg-rose-600" onclick="startGame('impossible')">IMPOSSIBLE</button>
+            <button class="btn btn-red mt-4" onclick="showMainMenu()">TERUG</button>
+        </div>
+    </div>
+
+    <!-- Shop -->
+    <div id="shop" class="ui-overlay hidden">
+        <h2 class="text-3xl font-black mb-6 text-amber-400">SKIN SHOP</h2>
+        <div id="shop-items" class="shop-grid"></div>
+        <button class="btn btn-red mt-8" onclick="showMainMenu()">SLUITEN</button>
+    </div>
+
+    <!-- Leaderboard -->
+    <div id="leaderboard-ui" class="ui-overlay hidden">
+        <h2 class="text-3xl font-black mb-6 text-indigo-400">WERELD TOP 10</h2>
+        <div id="leaderboard-content" class="leaderboard-list">
+            <div class="p-8 text-center text-slate-400">Laden...</div>
+        </div>
+        <button class="btn btn-red mt-8" onclick="showMainMenu()">TERUG</button>
+    </div>
+
+    <!-- Game Over -->
+    <div id="game-over" class="ui-overlay hidden">
+        <h2 class="text-6xl font-black text-rose-500 mb-2">CRASH!</h2>
+        <p class="text-xl mb-8">Score: <span id="final-score" class="font-bold">0</span></p>
+        
+        <div id="score-submit-area" class="flex flex-col gap-3 w-full max-w-xs mb-8">
+            <input type="text" id="player-name" placeholder="JE NAAM" class="bg-slate-800 border-2 border-slate-700 p-4 rounded-xl text-center font-bold outline-none focus:border-indigo-500 transition">
+            <button id="btn-submit" class="btn" onclick="submitScore()">SCORE OPSLAAN</button>
+        </div>
+
+        <div class="flex flex-col gap-3 w-full max-w-xs">
+            <button class="btn" onclick="restartGame()">OPNIEUW</button>
+            <button class="btn btn-red" onclick="showMainMenu()">MENU</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // --- CONFIG & INITIALIZATION ---
+    let firebaseConfig;
+    try {
+        firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            apiKey: "PLACEHOLDER",
+            authDomain: "PLACEHOLDER",
+            projectId: "PLACEHOLDER",
+            storageBucket: "PLACEHOLDER",
+            messagingSenderId: "PLACEHOLDER",
+            appId: "PLACEHOLDER"
+        };
+        firebase.initializeApp(firebaseConfig);
+    } catch (e) {
+        console.warn("Firebase config not found.");
+    }
+
+    const db = firebase.apps.length ? firebase.firestore() : null;
+    const auth = firebase.apps.length ? firebase.auth() : null;
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'blox-dash-v2';
+
+    let gems = parseInt(localStorage.getItem('bd_gems')) || 0;
+    let purchasedSkins = JSON.parse(localStorage.getItem('bd_skins')) || [0];
+    let currentSkinId = parseInt(localStorage.getItem('bd_active_skin')) || 0;
+    let user = null;
+
+    async function initAuth() {
+        if (!auth) return;
+        try {
+            if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                await auth.signInWithCustomToken(__initial_auth_token);
+            } else {
+                await auth.signInAnonymously();
+            }
+        } catch (e) { console.error(e); }
+    }
+    
+    if (auth) {
+        auth.onAuthStateChanged(u => user = u);
+        initAuth();
+    }
+
+    const SKINS = [
+        { id: 0, name: "Basic", color: "#10b981", cost: 0, label: "" },
+        { id: 1, name: "Neon Blue", color: "#3b82f6", cost: 500, label: "" },
+        { id: 2, name: "Sunset", color: "#f59e0b", cost: 2500, label: "" },
+        { id: 3, name: "Amethyst", color: "#a855f7", cost: 10000, label: "" },
+        { id: 4, name: "Crimson", color: "#ef4444", cost: 50000, label: "" },
+        { id: 5, name: "Obsidian", color: "#1e293b", cost: 250000, label: "" },
+        { id: 6, name: "Diamond", color: "#99f6e4", cost: 1000000, label: "D" },
+        { id: 7, name: "ADMIN", color: "#fbbf24", cost: 10000000, label: "A", special: true }
+    ];
+
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let gameState = 'menu';
+    let score = 0;
+    let difficulty = 'easy';
+    let obstacles = [];
+    let gameSpeed = 5;
+    let spawnTimer = 0;
+
+    let player = {
+        x: 100,
+        y: 0,
+        w: 45,
+        h: 45,
+        vy: 0,
+        rotation: 0,
+        grounded: false
+    };
+
+    const GRAVITY = 0.8;
+    const JUMP = -14;
+    const GROUND_Y = 120;
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        player.y = canvas.height - GROUND_Y - player.h;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function updateGemDisplay() {
+        document.getElementById('gem-count').innerText = gems.toLocaleString();
+        localStorage.setItem('bd_gems', gems);
+    }
+
+    function startGame(diff) {
+        difficulty = diff;
+        score = 0;
+        obstacles = [];
+        gameState = 'playing';
+        gameSpeed = diff === 'easy' ? 8 : diff === 'medium' ? 12 : diff === 'hard' ? 16 : 22;
+        hideAllUI();
+    }
+
+    function restartGame() { startGame(difficulty); }
+
+    function die() {
+        gameState = 'gameover';
+        hideAllUI();
+        document.getElementById('game-over').classList.remove('hidden');
+        document.getElementById('final-score').innerText = score;
+        document.getElementById('score-submit-area').classList.toggle('hidden', !db);
+        document.getElementById('btn-submit').disabled = false;
+        document.getElementById('btn-submit').innerText = "SCORE OPSLAAN";
+    }
+
+    function hideAllUI() {
+        document.querySelectorAll('.ui-overlay').forEach(el => el.classList.add('hidden'));
+    }
+
+    function showMainMenu() { hideAllUI(); document.getElementById('main-menu').classList.remove('hidden'); gameState = 'menu'; }
+    function showLevelSelect() { hideAllUI(); document.getElementById('level-select').classList.remove('hidden'); }
+
+    function showShop() {
+        hideAllUI();
+        document.getElementById('shop').classList.remove('hidden');
+        const container = document.getElementById('shop-items');
+        container.innerHTML = '';
+        SKINS.forEach(skin => {
+            const isOwned = purchasedSkins.includes(skin.id);
+            const isActive = currentSkinId === skin.id;
+            const card = document.createElement('div');
+            card.className = `skin-card ${isActive ? 'active' : ''}`;
+            card.innerHTML = `
+                <div class="skin-preview" style="background: ${skin.color}; border: ${skin.special ? '3px solid gold' : '2px solid rgba(255,255,255,0.2)'}">${skin.label}</div>
+                <div class="text-sm font-bold mb-1">${skin.name}</div>
+                <button class="w-full py-2 rounded-lg text-xs font-black transition ${isOwned ? 'bg-slate-700' : 'bg-indigo-600 hover:scale-105'}" onclick="handleSkinClick(${skin.id})">
+                    ${isOwned ? (isActive ? 'ACTIEF' : 'KIES') : '💎 ' + formatNumber(skin.cost)}
+                </button>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    function handleSkinClick(id) {
+        const skin = SKINS.find(s => s.id === id);
+        if (purchasedSkins.includes(id)) {
+            currentSkinId = id;
+            localStorage.setItem('bd_active_skin', id);
+            showShop();
+        } else if (gems >= skin.cost) {
+            gems -= skin.cost;
+            purchasedSkins.push(id);
+            currentSkinId = id;
+            localStorage.setItem('bd_skins', JSON.stringify(purchasedSkins));
+            localStorage.setItem('bd_active_skin', id);
+            updateGemDisplay();
+            showShop();
+        }
+    }
+
+    async function showLeaderboard() {
+        hideAllUI();
+        document.getElementById('leaderboard-ui').classList.remove('hidden');
+        const content = document.getElementById('leaderboard-content');
+        if (!db) {
+            content.innerHTML = '<div class="p-8 text-center text-rose-400">Leaderboard niet verbonden.</div>';
+            return;
+        }
+        content.innerHTML = '<div class="p-8 text-center text-slate-400">Laden...</div>';
+        try {
+            const snap = await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('leaderboard').get();
+            let data = [];
+            snap.forEach(doc => data.push(doc.data()));
+            data.sort((a, b) => b.score - a.score);
+            content.innerHTML = data.slice(0, 10).map((e, i) => `
+                <div class="leaderboard-item ${i === 0 ? 'rank-1' : ''}">
+                    <div class="flex items-center gap-3">
+                        <span class="opacity-50 font-black">#${i + 1}</span>
+                        <span class="font-bold">${e.name}</span>
+                    </div>
+                    <span class="font-black text-indigo-400">${e.score.toLocaleString()}</span>
+                </div>
+            `).join('') || '<div class="p-8 text-center">Nog geen scores!</div>';
+        } catch (e) { content.innerHTML = '<div class="p-8 text-center">Fout bij laden.</div>'; }
+    }
+
+    async function submitScore() {
+        if (!db || !user) return;
+        const btn = document.getElementById('btn-submit');
+        const name = document.getElementById('player-name').value.trim() || "Anoniem";
+        btn.disabled = true;
+        btn.innerText = "OPSLAAN...";
+        try {
+            await db.collection('artifacts').doc(appId).collection('public').doc('data').collection('leaderboard').add({
+                name, score, difficulty, timestamp: firebase.firestore.FieldValue.serverTimestamp(), uid: user.uid
+            });
+            btn.innerText = "GEDAAN!";
+            document.getElementById('score-submit-area').classList.add('hidden');
+        } catch (e) { btn.innerText = "FOUT!"; btn.disabled = false; }
+    }
+
+    function formatNumber(num) {
+        if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+        if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+        return num;
+    }
+
+    function update() {
+        if (gameState !== 'playing') return;
+        score++;
+        if (score % 60 === 0) {
+            gems += (difficulty === 'impossible' ? 5 : 1);
+            updateGemDisplay();
+        }
+        player.vy += GRAVITY;
+        player.y += player.vy;
+        const limit = canvas.height - GROUND_Y - player.h;
+        if (player.y > limit) {
+            player.y = limit;
+            player.vy = 0;
+            player.grounded = true;
+            player.rotation = Math.round(player.rotation / 90) * 90;
+        } else {
+            player.grounded = false;
+            player.rotation += 4 * (gameSpeed / 10);
+        }
+        spawnTimer--;
+        if (spawnTimer <= 0) {
+            obstacles.push({ x: canvas.width, y: canvas.height - GROUND_Y, w: 40, h: 40, type: Math.random() > 0.4 ? 'spike' : 'block' });
+            spawnTimer = (80 + Math.random() * 60) / (gameSpeed / 8);
+        }
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let o = obstacles[i];
+            o.x -= gameSpeed;
+            const pB = { x: player.x + 5, y: player.y + 5, w: player.w - 10, h: player.h - 10 };
+            const oB = { x: o.x + 5, y: o.y - o.h + 5, w: o.w - 10, h: o.h - 10 };
+            if (pB.x < oB.x + oB.w && pB.x + pB.w > oB.x && pB.y < oB.y + oB.h && pB.y + pB.h > oB.y) die();
+            if (o.x < -100) obstacles.splice(i, 1);
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#1e293b';
+        ctx.fillRect(0, canvas.height - GROUND_Y, canvas.width, GROUND_Y);
+        ctx.strokeStyle = '#334155';
+        ctx.lineWidth = 4;
+        ctx.strokeRect(-10, canvas.height - GROUND_Y, canvas.width + 20, 4);
+
+        if (gameState === 'playing' || gameState === 'gameover') {
+            const skin = SKINS.find(s => s.id === currentSkinId);
+            obstacles.forEach(o => {
+                ctx.fillStyle = o.type === 'spike' ? '#f43f5e' : '#475569';
+                if (o.type === 'spike') {
+                    ctx.beginPath(); ctx.moveTo(o.x, o.y); ctx.lineTo(o.x + o.w / 2, o.y - o.h); ctx.lineTo(o.x + o.w, o.y); ctx.fill();
+                } else {
+                    ctx.fillRect(o.x, o.y - o.h, o.w, o.h); ctx.strokeStyle = 'white'; ctx.lineWidth = 2; ctx.strokeRect(o.x, o.y - o.h, o.w, o.h);
+                }
+            });
+            ctx.save();
+            ctx.translate(player.x + player.w / 2, player.y + player.h / 2);
+            ctx.rotate(player.rotation * Math.PI / 180);
+            ctx.fillStyle = skin.color;
+            ctx.fillRect(-player.w / 2, -player.h / 2, player.w, player.h);
+            ctx.strokeStyle = skin.special ? '#fbbf24' : 'white';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-player.w / 2, -player.h / 2, player.w, player.h);
+            if (skin.label) {
+                ctx.fillStyle = skin.id === 7 ? 'black' : 'white';
+                ctx.font = '900 24px Outfit'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText(skin.label, 0, 0);
+            }
+            ctx.restore();
+            if (gameState === 'playing') {
+                ctx.fillStyle = 'white'; ctx.font = '900 24px Outfit'; ctx.fillText(`SCORE: ${score}`, 20, 45);
+            }
+        }
+    }
+
+    function loop() { update(); draw(); requestAnimationFrame(loop); }
+    window.addEventListener('keydown', e => { if ((e.code === 'Space' || e.code === 'ArrowUp') && player.grounded && gameState === 'playing') player.vy = JUMP; });
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); if (player.grounded && gameState === 'playing') player.vy = JUMP; }, { passive: false });
+    updateGemDisplay();
+    loop();
+</script>
+</body>
+</html>
